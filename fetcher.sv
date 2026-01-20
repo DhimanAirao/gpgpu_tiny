@@ -1,4 +1,3 @@
-`default_nettype none
 `timescale 1ns/1ns
 
 // INSTRUCTION FETCHER
@@ -8,22 +7,22 @@ module fetcher #(
     parameter PROGRAM_MEM_ADDR_BITS = 8,
     parameter PROGRAM_MEM_DATA_BITS = 16
 ) (
-    input wire clk,
-    input wire reset,
+    input logic clk,
+    input logic reset,
     
     // Execution State
-    input reg [2:0] core_state,
-    input reg [7:0] current_pc,
+    input logic [2:0] core_state,
+    input logic [7:0] current_pc,
 
     // Program Memory
-    output reg mem_read_valid,
-    output reg [PROGRAM_MEM_ADDR_BITS-1:0] mem_read_address,
-    input reg mem_read_ready,
-    input reg [PROGRAM_MEM_DATA_BITS-1:0] mem_read_data,
+    output logic mem_read_valid,
+    output logic [PROGRAM_MEM_ADDR_BITS-1:0] mem_read_address,
+    input logic mem_read_ready,
+    input logic [PROGRAM_MEM_DATA_BITS-1:0] mem_read_data,
 
     // Fetcher Output
-    output reg [2:0] fetcher_state,
-    output reg [PROGRAM_MEM_DATA_BITS-1:0] instruction
+    output logic [2:0] fetcher_state,
+    output logic [PROGRAM_MEM_DATA_BITS-1:0] instruction
 );
     localparam IDLE = 3'b000, 
         FETCHING = 3'b001, 

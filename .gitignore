@@ -1,0 +1,17 @@
+# Ignore log files
+*.log
+*.bak
+*.wlf
+*.pdf
+modelsim.ini
+sram*
+*.q*
+
+# Ignore temp folders
+temp/
+db/
+greybox_tmp/
+incremental_db/
+work/
+.qsys_edit/
+output_files/

@@ -1,13 +1,12 @@
-`default_nettype none
 `timescale 1ns/1ns
 
 // GPU
 // > Built to use an external async memory with multi-channel read/write
 // > Assumes that the program is loaded into program memory, data into data memory, and threads into
-//   the device control register before the start signal is triggered
+//   the device control logicister before the start signal is triggered
 // > Has memory controllers to interface between external memory and its multiple cores
 // > Configurable number of cores and thread capacity per core
-module gpgpu #(
+module gpu #(
     parameter DATA_MEM_ADDR_BITS = 8,        // Number of bits in data memory address (256 rows)
     parameter DATA_MEM_DATA_BITS = 8,        // Number of bits in data memory value (8 bit data)
     parameter DATA_MEM_NUM_CHANNELS = 4,     // Number of concurrent channels for sending requests to data memory
@@ -15,233 +14,242 @@ module gpgpu #(
     parameter PROGRAM_MEM_DATA_BITS = 16,    // Number of bits in program memory value (16 bit instruction)
     parameter PROGRAM_MEM_NUM_CHANNELS = 1,  // Number of concurrent channels for sending requests to program memory
     parameter NUM_CORES = 2,                 // Number of cores to include in this GPU
-    parameter THREADS_PER_BLOCK = 4          // Number of threads to handle per block (determines the compute resources of each core)
+    parameter THREADS_PER_BLOCK = 4,         // Number of threads to handle per block (determines the compute resources of each core)
+    parameter PROG_DATA_SIZE = 13,            // Number of program data words to initialize
+    parameter DATA_SIZE = 16                 // Number of data words to initialize
 ) (
-    input wire clk,
-    input wire reset,
+    input logic clk,
+    input logic reset,
 
     // Kernel Execution
-    input wire start,
-    output wire done,
+    input logic start,
+    output logic done,
+    output logic init_complete,
 
-    // Device Control Register
-    input wire device_control_write_enable,
-    input wire [7:0] device_control_data,
-
-    // Program Memory (internal: served from SDRAM)
-
-    // Data Memory
-    // Data Memory (internal: connected to SDRAM controller below)
-    output wire [DATA_MEM_NUM_CHANNELS-1:0] data_mem_read_valid,
-    output wire [DATA_MEM_ADDR_BITS-1:0] data_mem_read_address [DATA_MEM_NUM_CHANNELS-1:0],
-    output wire [DATA_MEM_NUM_CHANNELS-1:0] data_mem_write_valid,
-    output wire [DATA_MEM_ADDR_BITS-1:0] data_mem_write_address [DATA_MEM_NUM_CHANNELS-1:0],
-    output wire [DATA_MEM_DATA_BITS-1:0] data_mem_write_data [DATA_MEM_NUM_CHANNELS-1:0],
-
-    // SDRAM physical pins
-    output [1:0]  sdram_ba_pad_o,
-    output [12:0] sdram_a_pad_o,
-    output        sdram_cs_n_pad_o,
-    output        sdram_ras_pad_o,
-    output        sdram_cas_pad_o,
-    output        sdram_we_pad_o,
-    inout  [15:0] sdram_dq_pad_io,
-    output [1:0]  sdram_dqm_pad_o,
-    output        sdram_cke_pad_o,
-    output        sdram_clk_pad_o
+    // Device Control logicister
+    input logic device_control_write_enable,
+    input logic [7:0] device_control_data,
+    
+    // Initialization Data (from external source)
+    input logic [PROGRAM_MEM_DATA_BITS-1:0] prog_init_data [0:PROG_DATA_SIZE-1],
+    input logic [DATA_MEM_DATA_BITS-1:0] data_init_data [0:DATA_SIZE-1]
 );
+    // Initialization state machine
+    localparam INIT_IDLE = 3'b000;
+    localparam INIT_PROG = 3'b001;
+    localparam INIT_DATA = 3'b010;
+    localparam INIT_DONE = 3'b011;
+    
+    logic [2:0] init_state = INIT_IDLE;
+    logic [7:0] init_index = 0;
+    assign init_complete = (init_state == INIT_DONE);
+    
+    // Gate the start signal - only allow GPU to start after initialization
+    logic gated_start;
+    assign gated_start = start && init_complete;
+
     // Control
-    wire [7:0] thread_count;
+    logic [7:0] thread_count;
 
-    // Program memory internal channels (served from SDRAM)
-    wire [PROGRAM_MEM_NUM_CHANNELS-1:0] program_mem_read_valid;
-    wire [PROGRAM_MEM_ADDR_BITS-1:0] program_mem_read_address [PROGRAM_MEM_NUM_CHANNELS-1:0];
-    reg [PROGRAM_MEM_NUM_CHANNELS-1:0] program_mem_read_ready;
-    reg [PROGRAM_MEM_DATA_BITS-1:0] program_mem_read_data [PROGRAM_MEM_NUM_CHANNELS-1:0];
+    // Program memory internal channels
+    logic [PROGRAM_MEM_NUM_CHANNELS-1:0] program_mem_read_valid;
+    logic [PROGRAM_MEM_ADDR_BITS-1:0] program_mem_read_address [PROGRAM_MEM_NUM_CHANNELS-1:0];
+    logic [PROGRAM_MEM_NUM_CHANNELS-1:0] program_mem_read_ready;
+    logic [PROGRAM_MEM_DATA_BITS-1:0] program_mem_read_data [PROGRAM_MEM_NUM_CHANNELS-1:0];
 
-    // Internal connection from SDRAM adapter back into the memory controller
-    // These are driven by the SDRAM glue logic below (reg/wire types chosen to be driven)
-    reg [DATA_MEM_NUM_CHANNELS-1:0] data_mem_read_ready;
-    reg [DATA_MEM_DATA_BITS-1:0] data_mem_read_data [DATA_MEM_NUM_CHANNELS-1:0];
-    reg [DATA_MEM_NUM_CHANNELS-1:0] data_mem_write_ready;
+    // Data memory internal channels
+    logic [DATA_MEM_NUM_CHANNELS-1:0] data_mem_read_valid;
+    logic [DATA_MEM_ADDR_BITS-1:0] data_mem_read_address [DATA_MEM_NUM_CHANNELS-1:0];
+    logic [DATA_MEM_NUM_CHANNELS-1:0] data_mem_read_ready;
+    logic [DATA_MEM_DATA_BITS-1:0] data_mem_read_data [DATA_MEM_NUM_CHANNELS-1:0];
+    logic [DATA_MEM_NUM_CHANNELS-1:0] data_mem_write_valid;
+    logic [DATA_MEM_ADDR_BITS-1:0] data_mem_write_address [DATA_MEM_NUM_CHANNELS-1:0];
+    logic [DATA_MEM_DATA_BITS-1:0] data_mem_write_data [DATA_MEM_NUM_CHANNELS-1:0];
+    logic [DATA_MEM_NUM_CHANNELS-1:0] data_mem_write_ready;
 
     // Compute Core State
-    reg [NUM_CORES-1:0] core_start;
-    reg [NUM_CORES-1:0] core_reset;
-    reg [NUM_CORES-1:0] core_done;
-    reg [7:0] core_block_id [NUM_CORES-1:0];
-    reg [$clog2(THREADS_PER_BLOCK):0] core_thread_count [NUM_CORES-1:0];
+    logic [NUM_CORES-1:0] core_start;
+    logic [NUM_CORES-1:0] core_reset;
+    logic [NUM_CORES-1:0] core_done;
+    logic [7:0] core_block_id [NUM_CORES-1:0];
+    logic [$clog2(THREADS_PER_BLOCK):0] core_thread_count [NUM_CORES-1:0];
 
     // LSU <> Data Memory Controller Channels
     localparam NUM_LSUS = NUM_CORES * THREADS_PER_BLOCK;
-    reg [NUM_LSUS-1:0] lsu_read_valid;
-    reg [DATA_MEM_ADDR_BITS-1:0] lsu_read_address [NUM_LSUS-1:0];
-    reg [NUM_LSUS-1:0] lsu_read_ready;
-    reg [DATA_MEM_DATA_BITS-1:0] lsu_read_data [NUM_LSUS-1:0];
-    reg [NUM_LSUS-1:0] lsu_write_valid;
-    reg [DATA_MEM_ADDR_BITS-1:0] lsu_write_address [NUM_LSUS-1:0];
-    reg [DATA_MEM_DATA_BITS-1:0] lsu_write_data [NUM_LSUS-1:0];
-    reg [NUM_LSUS-1:0] lsu_write_ready;
+    logic [NUM_LSUS-1:0] lsu_read_valid;
+    logic [DATA_MEM_ADDR_BITS-1:0] lsu_read_address [NUM_LSUS-1:0];
+    logic [NUM_LSUS-1:0] lsu_read_ready;
+    logic [DATA_MEM_DATA_BITS-1:0] lsu_read_data [NUM_LSUS-1:0];
+    logic [NUM_LSUS-1:0] lsu_write_valid;
+    logic [DATA_MEM_ADDR_BITS-1:0] lsu_write_address [NUM_LSUS-1:0];
+    logic [DATA_MEM_DATA_BITS-1:0] lsu_write_data [NUM_LSUS-1:0];
+    logic [NUM_LSUS-1:0] lsu_write_ready;
 
     // Fetcher <> Program Memory Controller Channels
     localparam NUM_FETCHERS = NUM_CORES;
-    reg [NUM_FETCHERS-1:0] fetcher_read_valid;
-    reg [PROGRAM_MEM_ADDR_BITS-1:0] fetcher_read_address [NUM_FETCHERS-1:0];
-    reg [NUM_FETCHERS-1:0] fetcher_read_ready;
-    reg [PROGRAM_MEM_DATA_BITS-1:0] fetcher_read_data [NUM_FETCHERS-1:0];
+    logic [NUM_FETCHERS-1:0] fetcher_read_valid;
+    logic [PROGRAM_MEM_ADDR_BITS-1:0] fetcher_read_address [NUM_FETCHERS-1:0];
+    logic [NUM_FETCHERS-1:0] fetcher_read_ready;
+    logic [PROGRAM_MEM_DATA_BITS-1:0] fetcher_read_data [NUM_FETCHERS-1:0];
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
-    // SDRAM controller instance (single host port). We'll implement a small
-    // arbiter below to service multiple memory channels from the GPU memory
-    // controller and present a single host interface to this SDRAM controller.
-    // Host signals for sdram_controller
-    reg [31:0] sd_wr_addr; // wide enough to hold SDRAM HADDR_WIDTH
-    reg [15:0] sd_wr_data;
-    reg sd_wr_enable;
-    reg [31:0] sd_rd_addr;
-    wire [15:0] sd_rd_data;
-    reg sd_rd_enable;
-    wire sd_rd_ready;
-    wire sd_busy;
-
-    sdram_controller sdram_controlleri (
-        .wr_addr       (sd_wr_addr),
-        .wr_data       (sd_wr_data),
-        .wr_enable     (sd_wr_enable),
-
-        .rd_addr       (sd_rd_addr),
-        .rd_data       (sd_rd_data),
-        .rd_ready      (sd_rd_ready),
-        .rd_enable     (sd_rd_enable),
-
-        .busy          (sd_busy),
-        .rst_n         (reset),
-        .clk           (clk),
-
-        .addr          (sdram_a_pad_o),
-        .bank_addr     (sdram_ba_pad_o),
-        .data          (sdram_dq_pad_io),
-        .clock_enable  (sdram_cke_pad_o),
-        .cs_n          (sdram_cs_n_pad_o),
-        .ras_n         (sdram_ras_pad_o),
-        .cas_n         (sdram_cas_pad_o),
-        .we_n          (sdram_we_pad_o),
-        .data_mask_low (sdram_dqm_pad_o[0]),
-        .data_mask_high(sdram_dqm_pad_o[1])
+    // Program Memory (1-port RAM) - Read/Write capable
+    logic [PROGRAM_MEM_DATA_BITS-1:0] prog_mem_q;
+    
+    // Multiplex between initialization writes and normal read/write operations
+    logic [PROGRAM_MEM_ADDR_BITS-1:0] prog_mem_addr_mux;
+    logic [PROGRAM_MEM_DATA_BITS-1:0] prog_mem_data_mux;
+    logic prog_mem_wren_mux;
+    logic prog_mem_rden_mux;
+    
+    // During INIT_PROG phase, write init data; otherwise pass through controller signals
+    assign prog_mem_addr_mux = (init_state == INIT_PROG) ? init_index : program_mem_read_address[0];
+    assign prog_mem_data_mux = (init_state == INIT_PROG) ? prog_init_data[init_index] : 16'b0;
+    assign prog_mem_wren_mux = (init_state == INIT_PROG) ? 1'b1 : 1'b0;  // Currently no writes from controller
+    assign prog_mem_rden_mux = (init_state == INIT_DONE) ? program_mem_read_valid[0] : 1'b0;
+    
+    prog_mem prog_mem_inst (
+        .address(prog_mem_addr_mux),
+        .clock(clk),
+        .data(prog_mem_data_mux),
+        .rden(prog_mem_rden_mux),
+        .wren(prog_mem_wren_mux),
+        .q(prog_mem_q)
     );
-
-    // Simple single-ported arbiter: service first pending write, otherwise first pending read.
-    // It presents a single host request to the SDRAM controller and returns ready/data
-    // back to the appropriate memory channel when the SDRAM reports completion.
+    
+    // Program memory output connections
+    assign program_mem_read_data[0] = prog_mem_q;
+    assign program_mem_read_ready[0] = program_mem_read_valid[0];  // Immediate response
+    
+    // Data Memory (1-port RAM) - with arbiter for 4 channels
+    logic [DATA_MEM_DATA_BITS-1:0] data_mem_q;
+    
+    // Arbiter state: which channel gets priority and is in flight
     integer ch_idx;
-    reg active_req;
-    reg active_is_write;
-    reg active_is_program;
-    integer active_channel;
-
-    // Ensure outputs/ready/data default to zero when idle
+    logic [2:0] active_data_channel;  // 0-3 for which channel, 4 for none
+    
+    // Multiplex between initialization and normal operations
+    logic [DATA_MEM_ADDR_BITS-1:0] data_mem_addr_mux;
+    logic [DATA_MEM_DATA_BITS-1:0] data_mem_data_mux;
+    logic data_mem_wren_mux;
+    logic data_mem_rden_mux;
+    
+    // Priority arbiter logic: prioritize writes over reads, and lower channel numbers over higher
     always @(posedge clk) begin
         if (reset) begin
-            sd_wr_enable <= 0;
-            sd_rd_enable <= 0;
-            sd_wr_addr <= 0;
-            sd_wr_data <= 0;
-            sd_rd_addr <= 0;
-            active_req <= 0;
-            data_mem_read_ready <= {DATA_MEM_NUM_CHANNELS{1'b0}};
-            data_mem_write_ready <= {DATA_MEM_NUM_CHANNELS{1'b0}};
-            program_mem_read_ready <= {PROGRAM_MEM_NUM_CHANNELS{1'b0}};
+            active_data_channel <= 4;  // None
             for (ch_idx = 0; ch_idx < DATA_MEM_NUM_CHANNELS; ch_idx = ch_idx + 1) begin
-                data_mem_read_data[ch_idx] <= {DATA_MEM_DATA_BITS{1'b0}};
-            end
-            for (ch_idx = 0; ch_idx < PROGRAM_MEM_NUM_CHANNELS; ch_idx = ch_idx + 1) begin
-                program_mem_read_data[ch_idx] <= {PROGRAM_MEM_DATA_BITS{1'b0}};
+                data_mem_read_ready[ch_idx] <= 1'b0;
+                data_mem_write_ready[ch_idx] <= 1'b0;
             end
         end else begin
-            // default: clear ready flags (they are pulsed when operation completes)
-            data_mem_read_ready <= {DATA_MEM_NUM_CHANNELS{1'b0}};
-            data_mem_write_ready <= {DATA_MEM_NUM_CHANNELS{1'b0}};
-
-            if (!active_req) begin
-                // pick a write first (give writes priority), otherwise pick program read, then data read
-                active_req <= 0;
-                active_is_write <= 0;
-                active_is_program <= 0;
-                // check data writes first
-                begin : check_writes
+            // Clear ready flags each cycle
+            for (ch_idx = 0; ch_idx < DATA_MEM_NUM_CHANNELS; ch_idx = ch_idx + 1) begin
+                data_mem_read_ready[ch_idx] <= 1'b0;
+                data_mem_write_ready[ch_idx] <= 1'b0;
+            end
+            
+            // If we just completed a request, clear active channel
+            if (active_data_channel < DATA_MEM_NUM_CHANNELS) begin
+                active_data_channel <= 4;  // Clear on next cycle
+            end
+            
+            // During init phase, nothing else happens
+            if (init_state == INIT_DONE) begin
+                // Check for new write requests (higher priority)
+                begin : check_data_writes
                     for (ch_idx = 0; ch_idx < DATA_MEM_NUM_CHANNELS; ch_idx = ch_idx + 1) begin
                         if (data_mem_write_valid[ch_idx]) begin
-                            active_req <= 1;
-                            active_is_write <= 1;
-                            active_is_program <= 0;
-                            active_channel = ch_idx;
-                            // build SDRAM host signals (zero-extend address, expand data)
-                            sd_wr_addr <= {24'b0, data_mem_write_address[ch_idx]};
-                            sd_wr_data <= { {(16-DATA_MEM_DATA_BITS){1'b0}}, data_mem_write_data[ch_idx] };
-                            sd_wr_enable <= 1;
-                            disable check_writes;
+                            active_data_channel <= ch_idx;
+                            data_mem_write_ready[ch_idx] <= 1'b1;
+                            disable check_data_writes;
                         end
                     end
                 end
-                // if no write picked, check program reads
-                if (!active_req) begin : check_prog_reads
-                    for (ch_idx = 0; ch_idx < PROGRAM_MEM_NUM_CHANNELS; ch_idx = ch_idx + 1) begin
-                        if (program_mem_read_valid[ch_idx]) begin
-                            active_req <= 1;
-                            active_is_write <= 0;
-                            active_is_program <= 1;
-                            active_channel = ch_idx;
-                            sd_rd_addr <= {24'b0, program_mem_read_address[ch_idx]};
-                            sd_rd_enable <= 1;
-                            disable check_prog_reads;
-                        end
-                    end
-                end
-                // if still no active req, check data reads
-                if (!active_req) begin : check_data_reads
+                
+                // If no write found, check for read requests
+                if (active_data_channel >= DATA_MEM_NUM_CHANNELS) begin : check_data_reads
                     for (ch_idx = 0; ch_idx < DATA_MEM_NUM_CHANNELS; ch_idx = ch_idx + 1) begin
                         if (data_mem_read_valid[ch_idx]) begin
-                            active_req <= 1;
-                            active_is_write <= 0;
-                            active_is_program <= 0;
-                            active_channel = ch_idx;
-                            sd_rd_addr <= {24'b0, data_mem_read_address[ch_idx]};
-                            sd_rd_enable <= 1;
+                            active_data_channel <= ch_idx;
+                            data_mem_read_ready[ch_idx] <= 1'b1;
                             disable check_data_reads;
                         end
-                    end
-                end
-            end else begin
-                // We have an active request in flight
-                if (active_is_write) begin
-                    // For writes, signal ready back to controller when SDRAM is not busy
-                    if (!sd_busy) begin
-                        data_mem_write_ready[active_channel] <= 1;
-                        sd_wr_enable <= 0;
-                        active_req <= 0;
-                    end
-                end else begin
-                    // For reads, wait for sd_rd_ready and then provide data
-                    if (sd_rd_ready) begin
-                        if (active_is_program) begin
-                            program_mem_read_data[active_channel] <= sd_rd_data[PROGRAM_MEM_DATA_BITS-1:0];
-                            program_mem_read_ready[active_channel] <= 1;
-                        end else begin
-                            data_mem_read_data[active_channel] <= sd_rd_data[DATA_MEM_DATA_BITS-1:0];
-                            data_mem_read_ready[active_channel] <= 1;
-                        end
-                        sd_rd_enable <= 0;
-                        active_req <= 0;
                     end
                 end
             end
         end
     end
+    
+    // Multiplex RAM inputs based on active channel or initialization
+    assign data_mem_addr_mux = (init_state == INIT_DATA) ? init_index : 
+                                (active_data_channel < DATA_MEM_NUM_CHANNELS) ? 
+                                (data_mem_write_valid[active_data_channel] ? 
+                                    data_mem_write_address[active_data_channel] : 
+                                    data_mem_read_address[active_data_channel]) : 
+                                data_mem_read_address[0];  // Default to channel 0 address
+    
+    assign data_mem_data_mux = (init_state == INIT_DATA) ? data_init_data[init_index] : 
+                                (active_data_channel < DATA_MEM_NUM_CHANNELS) ? 
+                                data_mem_write_data[active_data_channel] : 8'b0;
+    
+    assign data_mem_wren_mux = (init_state == INIT_DATA) ? 1'b1 : 
+                                (init_state == INIT_DONE && active_data_channel < DATA_MEM_NUM_CHANNELS && data_mem_write_valid[active_data_channel]) ? 1'b1 : 1'b0;
+    
+    assign data_mem_rden_mux = (init_state == INIT_DONE && active_data_channel < DATA_MEM_NUM_CHANNELS && data_mem_read_valid[active_data_channel]) ? 1'b1 : 1'b0;
+    
+    data_mem data_mem_inst (
+        .address(data_mem_addr_mux),
+        .clock(clk),
+        .data(data_mem_data_mux),
+        .rden(data_mem_rden_mux),
+        .wren(data_mem_wren_mux),
+        .q(data_mem_q)
+    );
+    
+    // Data memory output connections - route read data to active channel
+    assign data_mem_read_data[0] = (active_data_channel == 0) ? data_mem_q : 8'b0;
+    assign data_mem_read_data[1] = (active_data_channel == 1) ? data_mem_q : 8'b0;
+    assign data_mem_read_data[2] = (active_data_channel == 2) ? data_mem_q : 8'b0;
+    assign data_mem_read_data[3] = (active_data_channel == 3) ? data_mem_q : 8'b0;
+    
+    // State machine to handle initialization
+    always @(posedge clk) begin
+        if (reset) begin
+            init_state <= INIT_IDLE;
+            init_index <= 0;
+        end else begin
+            case (init_state)
+                INIT_IDLE: begin
+                    init_index <= 0;
+                    init_state <= INIT_PROG;
+                end
+                INIT_PROG: begin
+                    if (init_index < PROG_DATA_SIZE - 1) begin
+                        init_index <= init_index + 1;
+                    end else begin
+                        init_index <= 0;
+                        init_state <= INIT_DATA;
+                    end
+                end
+                INIT_DATA: begin
+                    if (init_index < DATA_SIZE - 1) begin
+                        init_index <= init_index + 1;
+                    end else begin
+                        init_state <= INIT_DONE;
+                    end
+                end
+                INIT_DONE: begin
+                    // Initialization complete
+                end
+            endcase
+        end
+    end
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    // Device Control Register
+    // Device Control logicister
     dcr dcr_instance (
         .clk(clk),
         .reset(reset),
@@ -280,13 +288,13 @@ module gpgpu #(
         .mem_write_ready(data_mem_write_ready)
     );
 
-    // Program Memory Controller
+    // Program Memory Controller (with write support)
     controller #(
         .ADDR_BITS(PROGRAM_MEM_ADDR_BITS),
         .DATA_BITS(PROGRAM_MEM_DATA_BITS),
         .NUM_CONSUMERS(NUM_FETCHERS),
         .NUM_CHANNELS(PROGRAM_MEM_NUM_CHANNELS),
-        .WRITE_ENABLE(0)
+        .WRITE_ENABLE(0)  // Enable write capability for program memory
     ) program_memory_controller (
         .clk(clk),
         .reset(reset),
@@ -309,7 +317,7 @@ module gpgpu #(
     ) dispatch_instance (
         .clk(clk),
         .reset(reset),
-        .start(start),
+        .start(gated_start),
         .thread_count(thread_count),
         .core_done(core_done),
         .core_start(core_start),
@@ -325,14 +333,14 @@ module gpgpu #(
         for (i = 0; i < NUM_CORES; i = i + 1) begin : cores
             // EDA: We create separate signals here to pass to cores because of a requirement
             // by the OpenLane EDA flow (uses Verilog 2005) that prevents slicing the top-level signals
-            reg [THREADS_PER_BLOCK-1:0] core_lsu_read_valid;
-            reg [DATA_MEM_ADDR_BITS-1:0] core_lsu_read_address [THREADS_PER_BLOCK-1:0];
-            reg [THREADS_PER_BLOCK-1:0] core_lsu_read_ready;
-            reg [DATA_MEM_DATA_BITS-1:0] core_lsu_read_data [THREADS_PER_BLOCK-1:0];
-            reg [THREADS_PER_BLOCK-1:0] core_lsu_write_valid;
-            reg [DATA_MEM_ADDR_BITS-1:0] core_lsu_write_address [THREADS_PER_BLOCK-1:0];
-            reg [DATA_MEM_DATA_BITS-1:0] core_lsu_write_data [THREADS_PER_BLOCK-1:0];
-            reg [THREADS_PER_BLOCK-1:0] core_lsu_write_ready;
+            logic [THREADS_PER_BLOCK-1:0] core_lsu_read_valid;
+            logic [DATA_MEM_ADDR_BITS-1:0] core_lsu_read_address [THREADS_PER_BLOCK-1:0];
+            logic [THREADS_PER_BLOCK-1:0] core_lsu_read_ready;
+            logic [DATA_MEM_DATA_BITS-1:0] core_lsu_read_data [THREADS_PER_BLOCK-1:0];
+            logic [THREADS_PER_BLOCK-1:0] core_lsu_write_valid;
+            logic [DATA_MEM_ADDR_BITS-1:0] core_lsu_write_address [THREADS_PER_BLOCK-1:0];
+            logic [DATA_MEM_DATA_BITS-1:0] core_lsu_write_data [THREADS_PER_BLOCK-1:0];
+            logic [THREADS_PER_BLOCK-1:0] core_lsu_write_ready;
 
             // Pass through signals between LSUs and data memory controller
             genvar j;

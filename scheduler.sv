@@ -1,4 +1,3 @@
-`default_nettype none
 `timescale 1ns/1ns
 
 // SCHEDULER
@@ -16,26 +15,26 @@
 module scheduler #(
     parameter THREADS_PER_BLOCK = 4
 )(
-    input wire clk,
-    input wire reset,
-    input wire start,
+    input logic clk,
+    input logic reset,
+    input logic start,
     
     // Control Signals
-    input reg decoded_mem_read_enable,
-    input reg decoded_mem_write_enable,
-    input reg decoded_ret,
+    input logic decoded_mem_read_enable,
+    input logic decoded_mem_write_enable,
+    input logic decoded_ret,
 
     // Memory Access State
-    input reg [2:0] fetcher_state,
-    input reg [1:0] lsu_state [THREADS_PER_BLOCK-1:0],
+    input logic [2:0] fetcher_state,
+    input logic [1:0] lsu_state [THREADS_PER_BLOCK-1:0],
 
     // Current & Next PC
-    output reg [7:0] current_pc,
-    input reg [7:0] next_pc [THREADS_PER_BLOCK-1:0],
+    output logic [7:0] current_pc,
+    input logic [7:0] next_pc [THREADS_PER_BLOCK-1:0],
 
     // Execution State
-    output reg [2:0] core_state,
-    output reg done
+    output logic [2:0] core_state,
+    output logic done
 );
     localparam IDLE = 3'b000, // Waiting to start
         FETCH = 3'b001,       // Fetch instructions from program memory
@@ -76,7 +75,7 @@ module scheduler #(
                 end
                 WAIT: begin
                     // Wait for all LSUs to finish their request before continuing
-                    reg any_lsu_waiting = 1'b0;
+                    automatic logic any_lsu_waiting = 1'b0;
                     for (int i = 0; i < THREADS_PER_BLOCK; i++) begin
                         // Make sure no lsu_state = REQUESTING or WAITING
                         if (lsu_state[i] == 2'b01 || lsu_state[i] == 2'b10) begin

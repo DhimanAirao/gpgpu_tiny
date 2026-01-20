@@ -1,4 +1,3 @@
-`default_nettype none
 `timescale 1ns/1ns
 
 // COMPUTE CORE
@@ -12,64 +11,64 @@ module core #(
     parameter PROGRAM_MEM_DATA_BITS = 16,
     parameter THREADS_PER_BLOCK = 4
 ) (
-    input wire clk,
-    input wire reset,
+    input logic clk,
+    input logic reset,
 
     // Kernel Execution
-    input wire start,
-    output wire done,
+    input logic start,
+    output logic done,
 
     // Block Metadata
-    input wire [7:0] block_id,
-    input wire [$clog2(THREADS_PER_BLOCK):0] thread_count,
+    input logic [7:0] block_id,
+    input logic [$clog2(THREADS_PER_BLOCK):0] thread_count,
 
     // Program Memory
-    output reg program_mem_read_valid,
-    output reg [PROGRAM_MEM_ADDR_BITS-1:0] program_mem_read_address,
-    input reg program_mem_read_ready,
-    input reg [PROGRAM_MEM_DATA_BITS-1:0] program_mem_read_data,
+    output logic program_mem_read_valid,
+    output logic [PROGRAM_MEM_ADDR_BITS-1:0] program_mem_read_address,
+    input logic program_mem_read_ready,
+    input logic [PROGRAM_MEM_DATA_BITS-1:0] program_mem_read_data,
 
     // Data Memory
-    output reg [THREADS_PER_BLOCK-1:0] data_mem_read_valid,
-    output reg [DATA_MEM_ADDR_BITS-1:0] data_mem_read_address [THREADS_PER_BLOCK-1:0],
-    input reg [THREADS_PER_BLOCK-1:0] data_mem_read_ready,
-    input reg [DATA_MEM_DATA_BITS-1:0] data_mem_read_data [THREADS_PER_BLOCK-1:0],
-    output reg [THREADS_PER_BLOCK-1:0] data_mem_write_valid,
-    output reg [DATA_MEM_ADDR_BITS-1:0] data_mem_write_address [THREADS_PER_BLOCK-1:0],
-    output reg [DATA_MEM_DATA_BITS-1:0] data_mem_write_data [THREADS_PER_BLOCK-1:0],
-    input reg [THREADS_PER_BLOCK-1:0] data_mem_write_ready
+    output logic [THREADS_PER_BLOCK-1:0] data_mem_read_valid,
+    output logic [DATA_MEM_ADDR_BITS-1:0] data_mem_read_address [THREADS_PER_BLOCK-1:0],
+    input logic [THREADS_PER_BLOCK-1:0] data_mem_read_ready,
+    input logic [DATA_MEM_DATA_BITS-1:0] data_mem_read_data [THREADS_PER_BLOCK-1:0],
+    output logic [THREADS_PER_BLOCK-1:0] data_mem_write_valid,
+    output logic [DATA_MEM_ADDR_BITS-1:0] data_mem_write_address [THREADS_PER_BLOCK-1:0],
+    output logic [DATA_MEM_DATA_BITS-1:0] data_mem_write_data [THREADS_PER_BLOCK-1:0],
+    input logic [THREADS_PER_BLOCK-1:0] data_mem_write_ready
 );
     // State
-    reg [2:0] core_state;
-    reg [2:0] fetcher_state;
-    reg [15:0] instruction;
+    logic [2:0] core_state;
+    logic [2:0] fetcher_state;
+    logic [15:0] instruction;
 
     // Intermediate Signals
-    reg [7:0] current_pc;
-    wire [7:0] next_pc[THREADS_PER_BLOCK-1:0];
-    reg [7:0] rs[THREADS_PER_BLOCK-1:0];
-    reg [7:0] rt[THREADS_PER_BLOCK-1:0];
-    reg [1:0] lsu_state[THREADS_PER_BLOCK-1:0];
-    reg [7:0] lsu_out[THREADS_PER_BLOCK-1:0];
-    wire [7:0] alu_out[THREADS_PER_BLOCK-1:0];
+    logic [7:0] current_pc;
+    logic [7:0] next_pc[THREADS_PER_BLOCK-1:0];
+    logic [7:0] rs[THREADS_PER_BLOCK-1:0];
+    logic [7:0] rt[THREADS_PER_BLOCK-1:0];
+    logic [1:0] lsu_state[THREADS_PER_BLOCK-1:0];
+    logic [7:0] lsu_out[THREADS_PER_BLOCK-1:0];
+    logic [7:0] alu_out[THREADS_PER_BLOCK-1:0];
     
     // Decoded Instruction Signals
-    reg [3:0] decoded_rd_address;
-    reg [3:0] decoded_rs_address;
-    reg [3:0] decoded_rt_address;
-    reg [2:0] decoded_nzp;
-    reg [7:0] decoded_immediate;
+    logic [3:0] decoded_rd_address;
+    logic [3:0] decoded_rs_address;
+    logic [3:0] decoded_rt_address;
+    logic [2:0] decoded_nzp;
+    logic [7:0] decoded_immediate;
 
     // Decoded Control Signals
-    reg decoded_reg_write_enable;           // Enable writing to a register
-    reg decoded_mem_read_enable;            // Enable reading from memory
-    reg decoded_mem_write_enable;           // Enable writing to memory
-    reg decoded_nzp_write_enable;           // Enable writing to NZP register
-    reg [1:0] decoded_reg_input_mux;        // Select input to register
-    reg [1:0] decoded_alu_arithmetic_mux;   // Select arithmetic operation
-    reg decoded_alu_output_mux;             // Select operation in ALU
-    reg decoded_pc_mux;                     // Select source of next PC
-    reg decoded_ret;
+    logic decoded_reg_write_enable;           // Enable writing to a register
+    logic decoded_mem_read_enable;            // Enable reading from memory
+    logic decoded_mem_write_enable;           // Enable writing to memory
+    logic decoded_nzp_write_enable;           // Enable writing to NZP register
+    logic [1:0] decoded_reg_input_mux;        // Select input to register
+    logic [1:0] decoded_alu_arithmetic_mux;   // Select arithmetic operation
+    logic decoded_alu_output_mux;             // Select operation in ALU
+    logic decoded_pc_mux;                     // Select source of next PC
+    logic decoded_ret;
 
     // Fetcher
     fetcher #(

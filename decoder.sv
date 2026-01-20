@@ -1,35 +1,34 @@
-`default_nettype none
 `timescale 1ns/1ns
 
 // INSTRUCTION DECODER
 // > Decodes an instruction into the control signals necessary to execute it
 // > Each core has it's own decoder
 module decoder (
-    input wire clk,
-    input wire reset,
+    input logic clk,
+    input logic reset,
 
-    input reg [2:0] core_state,
-    input reg [15:0] instruction,
+    input logic [2:0] core_state,
+    input logic [15:0] instruction,
     
     // Instruction Signals
-    output reg [3:0] decoded_rd_address,
-    output reg [3:0] decoded_rs_address,
-    output reg [3:0] decoded_rt_address,
-    output reg [2:0] decoded_nzp,
-    output reg [7:0] decoded_immediate,
+    output logic [3:0] decoded_rd_address,
+    output logic [3:0] decoded_rs_address,
+    output logic [3:0] decoded_rt_address,
+    output logic [2:0] decoded_nzp,
+    output logic [7:0] decoded_immediate,
     
     // Control Signals
-    output reg decoded_reg_write_enable,           // Enable writing to a register
-    output reg decoded_mem_read_enable,            // Enable reading from memory
-    output reg decoded_mem_write_enable,           // Enable writing to memory
-    output reg decoded_nzp_write_enable,           // Enable writing to NZP register
-    output reg [1:0] decoded_reg_input_mux,        // Select input to register
-    output reg [1:0] decoded_alu_arithmetic_mux,   // Select arithmetic operation
-    output reg decoded_alu_output_mux,             // Select operation in ALU
-    output reg decoded_pc_mux,                     // Select source of next PC
+    output logic decoded_reg_write_enable,           // Enable writing to a register
+    output logic decoded_mem_read_enable,            // Enable reading from memory
+    output logic decoded_mem_write_enable,           // Enable writing to memory
+    output logic decoded_nzp_write_enable,           // Enable writing to NZP register
+    output logic [1:0] decoded_reg_input_mux,        // Select input to register
+    output logic [1:0] decoded_alu_arithmetic_mux,   // Select arithmetic operation
+    output logic decoded_alu_output_mux,             // Select operation in ALU
+    output logic decoded_pc_mux,                     // Select source of next PC
 
     // Return (finished executing thread)
-    output reg decoded_ret
+    output logic decoded_ret
 );
     localparam NOP = 4'b0000,
         BRnzp = 4'b0001,

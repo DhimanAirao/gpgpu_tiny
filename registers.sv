@@ -1,4 +1,3 @@
-`default_nettype none
 `timescale 1ns/1ns
 
 // REGISTER FILE
@@ -9,40 +8,40 @@ module registers #(
     parameter THREAD_ID = 0,
     parameter DATA_BITS = 8
 ) (
-    input wire clk,
-    input wire reset,
-    input wire enable, // If current block has less threads then block size, some registers will be inactive
+    input logic clk,
+    input logic reset,
+    input logic enable, // If current block has less threads then block size, some registers will be inactive
 
     // Kernel Execution
-    input reg [7:0] block_id,
+    input logic [7:0] block_id,
 
     // State
-    input reg [2:0] core_state,
+    input logic [2:0] core_state,
 
     // Instruction Signals
-    input reg [3:0] decoded_rd_address,
-    input reg [3:0] decoded_rs_address,
-    input reg [3:0] decoded_rt_address,
+    input logic [3:0] decoded_rd_address,
+    input logic [3:0] decoded_rs_address,
+    input logic [3:0] decoded_rt_address,
 
     // Control Signals
-    input reg decoded_reg_write_enable,
-    input reg [1:0] decoded_reg_input_mux,
-    input reg [DATA_BITS-1:0] decoded_immediate,
+    input logic decoded_reg_write_enable,
+    input logic [1:0] decoded_reg_input_mux,
+    input logic [DATA_BITS-1:0] decoded_immediate,
 
     // Thread Unit Outputs
-    input reg [DATA_BITS-1:0] alu_out,
-    input reg [DATA_BITS-1:0] lsu_out,
+    input logic [DATA_BITS-1:0] alu_out,
+    input logic [DATA_BITS-1:0] lsu_out,
 
     // Registers
-    output reg [7:0] rs,
-    output reg [7:0] rt
+    output logic [7:0] rs,
+    output logic [7:0] rt
 );
     localparam ARITHMETIC = 2'b00,
         MEMORY = 2'b01,
         CONSTANT = 2'b10;
 
     // 16 registers per thread (13 free registers and 3 read-only registers)
-    reg [7:0] registers[15:0];
+    logic [7:0] registers[15:0];
 
     always @(posedge clk) begin
         if (reset) begin

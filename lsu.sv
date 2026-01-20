@@ -1,4 +1,3 @@
-`default_nettype none
 `timescale 1ns/1ns
 
 // LOAD-STORE UNIT
@@ -6,34 +5,34 @@
 // > Each thread in each core has it's own LSU
 // > LDR, STR instructions are executed here
 module lsu (
-    input wire clk,
-    input wire reset,
-    input wire enable, // If current block has less threads then block size, some LSUs will be inactive
+    input logic clk,
+    input logic reset,
+    input logic enable, // If current block has less threads then block size, some LSUs will be inactive
 
     // State
-    input reg [2:0] core_state,
+    input logic [2:0] core_state,
 
     // Memory Control Sgiansl
-    input reg decoded_mem_read_enable,
-    input reg decoded_mem_write_enable,
+    input logic decoded_mem_read_enable,
+    input logic decoded_mem_write_enable,
 
     // Registers
-    input reg [7:0] rs,
-    input reg [7:0] rt,
+    input logic [7:0] rs,
+    input logic [7:0] rt,
 
     // Data Memory
-    output reg mem_read_valid,
-    output reg [7:0] mem_read_address,
-    input reg mem_read_ready,
-    input reg [7:0] mem_read_data,
-    output reg mem_write_valid,
-    output reg [7:0] mem_write_address,
-    output reg [7:0] mem_write_data,
-    input reg mem_write_ready,
+    output logic mem_read_valid,
+    output logic [7:0] mem_read_address,
+    input logic mem_read_ready,
+    input logic [7:0] mem_read_data,
+    output logic mem_write_valid,
+    output logic [7:0] mem_write_address,
+    output logic [7:0] mem_write_data,
+    input logic mem_write_ready,
 
     // LSU Outputs
-    output reg [1:0] lsu_state,
-    output reg [7:0] lsu_out
+    output logic [1:0] lsu_state,
+    output logic [7:0] lsu_out
 );
     localparam IDLE = 2'b00, REQUESTING = 2'b01, WAITING = 2'b10, DONE = 2'b11;
 

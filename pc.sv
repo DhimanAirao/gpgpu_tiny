@@ -1,4 +1,3 @@
-`default_nettype none
 `timescale 1ns/1ns
 
 // PROGRAM COUNTER
@@ -11,27 +10,27 @@ module pc #(
     parameter DATA_MEM_DATA_BITS = 8,
     parameter PROGRAM_MEM_ADDR_BITS = 8
 ) (
-    input wire clk,
-    input wire reset,
-    input wire enable, // If current block has less threads then block size, some PCs will be inactive
+    input logic clk,
+    input logic reset,
+    input logic enable, // If current block has less threads then block size, some PCs will be inactive
 
     // State
-    input reg [2:0] core_state,
+    input logic [2:0] core_state,
 
     // Control Signals
-    input reg [2:0] decoded_nzp,
-    input reg [DATA_MEM_DATA_BITS-1:0] decoded_immediate,
-    input reg decoded_nzp_write_enable,
-    input reg decoded_pc_mux, 
+    input logic [2:0] decoded_nzp,
+    input logic [DATA_MEM_DATA_BITS-1:0] decoded_immediate,
+    input logic decoded_nzp_write_enable,
+    input logic decoded_pc_mux, 
 
     // ALU Output - used for alu_out[2:0] to compare with NZP register
-    input reg [DATA_MEM_DATA_BITS-1:0] alu_out,
+    input logic [DATA_MEM_DATA_BITS-1:0] alu_out,
 
     // Current & Next PCs
-    input reg [PROGRAM_MEM_ADDR_BITS-1:0] current_pc,
-    output reg [PROGRAM_MEM_ADDR_BITS-1:0] next_pc
+    input logic [PROGRAM_MEM_ADDR_BITS-1:0] current_pc,
+    output logic [PROGRAM_MEM_ADDR_BITS-1:0] next_pc
 );
-    reg [2:0] nzp;
+    logic [2:0] nzp;
 
     always @(posedge clk) begin
         if (reset) begin

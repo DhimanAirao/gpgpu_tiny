@@ -1,4 +1,3 @@
-`default_nettype none
 `timescale 1ns/1ns
 
 // BLOCK DISPATCH
@@ -9,31 +8,31 @@ module dispatch #(
     parameter NUM_CORES = 2,
     parameter THREADS_PER_BLOCK = 4
 ) (
-    input wire clk,
-    input wire reset,
-    input wire start,
+    input logic clk,
+    input logic reset,
+    input logic start,
 
     // Kernel Metadata
-    input wire [7:0] thread_count,
+    input logic [7:0] thread_count,
 
     // Core States
-    input reg [NUM_CORES-1:0] core_done,
-    output reg [NUM_CORES-1:0] core_start,
-    output reg [NUM_CORES-1:0] core_reset,
-    output reg [7:0] core_block_id [NUM_CORES-1:0],
-    output reg [$clog2(THREADS_PER_BLOCK):0] core_thread_count [NUM_CORES-1:0],
+    input logic [NUM_CORES-1:0] core_done,
+    output logic [NUM_CORES-1:0] core_start,
+    output logic [NUM_CORES-1:0] core_reset,
+    output logic [7:0] core_block_id [NUM_CORES-1:0],
+    output logic [$clog2(THREADS_PER_BLOCK):0] core_thread_count [NUM_CORES-1:0],
 
     // Kernel Execution
-    output reg done
+    output logic done
 );
     // Calculate the total number of blocks based on total threads & threads per block
-    wire [7:0] total_blocks;
+    logic [7:0] total_blocks;
     assign total_blocks = (thread_count + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 
     // Keep track of how many blocks have been processed
-    reg [7:0] blocks_dispatched; // How many blocks have been sent to cores?
-    reg [7:0] blocks_done; // How many blocks have finished processing?
-    reg start_execution; // EDA: Unimportant hack used because of EDA tooling
+    logic [7:0] blocks_dispatched; // How many blocks have been sent to cores?
+    logic [7:0] blocks_done; // How many blocks have finished processing?
+    logic start_execution; // EDA: Unimportant hack used because of EDA tooling
 
     always @(posedge clk) begin
         if (reset) begin
