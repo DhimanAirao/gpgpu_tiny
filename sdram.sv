@@ -128,15 +128,15 @@ output                     data_mask_high;
 
 /* I/O Registers */
 
-reg  [HADDR_WIDTH-1:0]   haddr_r;
-reg  [15:0]              wr_data_r;
-reg  [15:0]              rd_data_r;
-reg                      busy;
-reg                      data_mask_low_r;
-reg                      data_mask_high_r;
-reg [SDRADDR_WIDTH-1:0]  addr_r;
-reg [BANK_WIDTH-1:0]     bank_addr_r;
-reg                      rd_ready_r;
+logic  [HADDR_WIDTH-1:0]   haddr_r;
+logic  [15:0]              wr_data_r;
+logic  [15:0]              rd_data_r;
+logic                      busy;
+logic                      data_mask_low_r;
+logic                      data_mask_high_r;
+logic [SDRADDR_WIDTH-1:0]  addr_r;
+logic [BANK_WIDTH-1:0]     bank_addr_r;
+logic                      rd_ready_r;
 
 wire [15:0]              data_output;
 wire                     data_mask_low, data_mask_high;
@@ -146,17 +146,17 @@ assign data_mask_low  = data_mask_low_r;
 assign rd_data        = rd_data_r;
 
 /* Internal Wiring */
-reg [3:0] state_cnt;
-reg [9:0] refresh_cnt;
+logic [3:0] state_cnt;
+logic [9:0] refresh_cnt;
 
-reg [7:0] command;
-reg [4:0] state;
+logic [7:0] command;
+logic [4:0] state;
 
 // TODO output addr[6:4] when programming mode register
 
-reg [7:0] command_nxt;
-reg [3:0] state_cnt_nxt;
-reg [4:0] next;
+logic [7:0] command_nxt;
+logic [3:0] state_cnt_nxt;
+logic [4:0] next;
 
 assign {clock_enable, cs_n, ras_n, cas_n, we_n} = command[7:3];
 // state[4] will be set if mode is read/write

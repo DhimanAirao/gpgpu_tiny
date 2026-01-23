@@ -15,8 +15,8 @@ module gpu #(
     parameter PROGRAM_MEM_NUM_CHANNELS = 1,  // Number of concurrent channels for sending requests to program memory
     parameter NUM_CORES = 2,                 // Number of cores to include in this GPU
     parameter THREADS_PER_BLOCK = 4,         // Number of threads to handle per block (determines the compute resources of each core)
-    parameter PROG_DATA_SIZE = 13,            // Number of program data words to initialize
-    parameter DATA_SIZE = 16                 // Number of data words to initialize
+    parameter PROG_DATA_SIZE = 19,            // Number of program data words to initialize
+    parameter DATA_SIZE = 3                 // Number of data words to initialize
 ) (
     input logic clk,
     input logic reset,
@@ -32,7 +32,7 @@ module gpu #(
     
     // Initialization Data (from external source)
     input logic [PROGRAM_MEM_DATA_BITS-1:0] prog_init_data [0:PROG_DATA_SIZE-1],
-    input logic [DATA_MEM_DATA_BITS-1:0] data_init_data [0:DATA_SIZE-1]
+    input logic [DATA_MEM_DATA_BITS-1:0] data_init_data [DATA_SIZE-1:0]
 );
     // Initialization state machine
     localparam INIT_IDLE = 3'b000;
@@ -118,101 +118,75 @@ module gpu #(
         .q(prog_mem_q)
     );
     
-    // Program memory output connections
-    assign program_mem_read_data[0] = prog_mem_q;
-    assign program_mem_read_ready[0] = program_mem_read_valid[0];  // Immediate response
+    // Pipeline delay for program memory read ready signal
+    logic program_mem_read_valid_delayed;
     
-    // Data Memory (1-port RAM) - with arbiter for 4 channels
-    logic [DATA_MEM_DATA_BITS-1:0] data_mem_q;
-    
-    // Arbiter state: which channel gets priority and is in flight
-    integer ch_idx;
-    logic [2:0] active_data_channel;  // 0-3 for which channel, 4 for none
-    
-    // Multiplex between initialization and normal operations
-    logic [DATA_MEM_ADDR_BITS-1:0] data_mem_addr_mux;
-    logic [DATA_MEM_DATA_BITS-1:0] data_mem_data_mux;
-    logic data_mem_wren_mux;
-    logic data_mem_rden_mux;
-    
-    // Priority arbiter logic: prioritize writes over reads, and lower channel numbers over higher
     always @(posedge clk) begin
         if (reset) begin
-            active_data_channel <= 4;  // None
-            for (ch_idx = 0; ch_idx < DATA_MEM_NUM_CHANNELS; ch_idx = ch_idx + 1) begin
-                data_mem_read_ready[ch_idx] <= 1'b0;
-                data_mem_write_ready[ch_idx] <= 1'b0;
-            end
+            program_mem_read_valid_delayed <= 1'b0;
         end else begin
-            // Clear ready flags each cycle
-            for (ch_idx = 0; ch_idx < DATA_MEM_NUM_CHANNELS; ch_idx = ch_idx + 1) begin
-                data_mem_read_ready[ch_idx] <= 1'b0;
-                data_mem_write_ready[ch_idx] <= 1'b0;
-            end
-            
-            // If we just completed a request, clear active channel
-            if (active_data_channel < DATA_MEM_NUM_CHANNELS) begin
-                active_data_channel <= 4;  // Clear on next cycle
-            end
-            
-            // During init phase, nothing else happens
-            if (init_state == INIT_DONE) begin
-                // Check for new write requests (higher priority)
-                begin : check_data_writes
-                    for (ch_idx = 0; ch_idx < DATA_MEM_NUM_CHANNELS; ch_idx = ch_idx + 1) begin
-                        if (data_mem_write_valid[ch_idx]) begin
-                            active_data_channel <= ch_idx;
-                            data_mem_write_ready[ch_idx] <= 1'b1;
-                            disable check_data_writes;
-                        end
-                    end
-                end
-                
-                // If no write found, check for read requests
-                if (active_data_channel >= DATA_MEM_NUM_CHANNELS) begin : check_data_reads
-                    for (ch_idx = 0; ch_idx < DATA_MEM_NUM_CHANNELS; ch_idx = ch_idx + 1) begin
-                        if (data_mem_read_valid[ch_idx]) begin
-                            active_data_channel <= ch_idx;
-                            data_mem_read_ready[ch_idx] <= 1'b1;
-                            disable check_data_reads;
-                        end
-                    end
-                end
-            end
+            program_mem_read_valid_delayed <= program_mem_read_valid[0];
         end
     end
     
-    // Multiplex RAM inputs based on active channel or initialization
-    assign data_mem_addr_mux = (init_state == INIT_DATA) ? init_index : 
-                                (active_data_channel < DATA_MEM_NUM_CHANNELS) ? 
-                                (data_mem_write_valid[active_data_channel] ? 
-                                    data_mem_write_address[active_data_channel] : 
-                                    data_mem_read_address[active_data_channel]) : 
-                                data_mem_read_address[0];  // Default to channel 0 address
+    // Program memory output connections
+    assign program_mem_read_data[0] = prog_mem_q;
+    assign program_mem_read_ready[0] = program_mem_read_valid_delayed;  // One cycle delayed response
     
-    assign data_mem_data_mux = (init_state == INIT_DATA) ? data_init_data[init_index] : 
-                                (active_data_channel < DATA_MEM_NUM_CHANNELS) ? 
-                                data_mem_write_data[active_data_channel] : 8'b0;
+    // Data Memory (4 separate 1-port RAMs) - one for each data channel
+    logic [DATA_MEM_DATA_BITS-1:0] data_mem_q [DATA_MEM_NUM_CHANNELS-1:0];
     
-    assign data_mem_wren_mux = (init_state == INIT_DATA) ? 1'b1 : 
-                                (init_state == INIT_DONE && active_data_channel < DATA_MEM_NUM_CHANNELS && data_mem_write_valid[active_data_channel]) ? 1'b1 : 1'b0;
+    // Multiplex between initialization and normal operations for each channel
+    logic [DATA_MEM_ADDR_BITS-1:0] data_mem_addr_mux [DATA_MEM_NUM_CHANNELS-1:0];
+    logic [DATA_MEM_DATA_BITS-1:0] data_mem_data_mux [DATA_MEM_NUM_CHANNELS-1:0];
+    logic data_mem_wren_mux [DATA_MEM_NUM_CHANNELS-1:0];
+    logic data_mem_rden_mux [DATA_MEM_NUM_CHANNELS-1:0];
     
-    assign data_mem_rden_mux = (init_state == INIT_DONE && active_data_channel < DATA_MEM_NUM_CHANNELS && data_mem_read_valid[active_data_channel]) ? 1'b1 : 1'b0;
+    integer ch_idx;
     
-    data_mem data_mem_inst (
-        .address(data_mem_addr_mux),
-        .clock(clk),
-        .data(data_mem_data_mux),
-        .rden(data_mem_rden_mux),
-        .wren(data_mem_wren_mux),
-        .q(data_mem_q)
-    );
-    
-    // Data memory output connections - route read data to active channel
-    assign data_mem_read_data[0] = (active_data_channel == 0) ? data_mem_q : 8'b0;
-    assign data_mem_read_data[1] = (active_data_channel == 1) ? data_mem_q : 8'b0;
-    assign data_mem_read_data[2] = (active_data_channel == 2) ? data_mem_q : 8'b0;
-    assign data_mem_read_data[3] = (active_data_channel == 3) ? data_mem_q : 8'b0;
+    // Generate 4 separate data memory instances
+    genvar ch;
+    generate
+        for (ch = 0; ch < DATA_MEM_NUM_CHANNELS; ch = ch + 1) begin : data_mem_channels
+            // Multiplex inputs for each channel based on initialization state
+            assign data_mem_addr_mux[ch] = (init_state == INIT_DATA) ? init_index : 
+                                            (data_mem_write_valid[ch]) ? data_mem_write_address[ch] : 
+                                            data_mem_read_address[ch];
+            
+            assign data_mem_data_mux[ch] = (init_state == INIT_DATA) ? data_init_data[init_index] : data_mem_write_data[ch];
+            
+            assign data_mem_wren_mux[ch] = (init_state == INIT_DATA) ? 1'b1 : 
+                                            (init_state == INIT_DONE && data_mem_write_valid[ch]) ? 1'b1 : 1'b0;
+            
+            assign data_mem_rden_mux[ch] = (init_state == INIT_DONE && data_mem_read_valid[ch]) ? 1'b1 : 1'b0;
+            
+            // Data memory instance for this channel
+            data_mem data_mem_inst (
+                .address(data_mem_addr_mux[ch]),
+                .clock(clk),
+                .data(data_mem_data_mux[ch]),
+                .rden(data_mem_rden_mux[ch]),
+                .wren(data_mem_wren_mux[ch]),
+                .q(data_mem_q[ch])
+            );
+            
+            // Pipeline delay for read valid signal (one cycle)
+            logic data_mem_read_valid_delayed;
+            
+            always @(posedge clk) begin
+                if (reset) begin
+                    data_mem_read_valid_delayed <= 1'b0;
+                end else begin
+                    data_mem_read_valid_delayed <= data_mem_read_valid[ch];
+                end
+            end
+            
+            // Data memory output and ready signal
+            assign data_mem_read_data[ch] = data_mem_q[ch];
+            assign data_mem_read_ready[ch] = data_mem_read_valid_delayed;  // One cycle delayed for read
+            assign data_mem_write_ready[ch] = data_mem_write_valid[ch];     // Immediate for write
+        end
+    endgenerate
     
     // State machine to handle initialization
     always @(posedge clk) begin
