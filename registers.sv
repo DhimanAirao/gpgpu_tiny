@@ -6,7 +6,10 @@
 module registers #(
     parameter THREADS_PER_BLOCK = 4,
     parameter THREAD_ID = 0,
-    parameter DATA_BITS = 8
+    parameter DATA_MEM_ADDR_BITS = 16,        // Number of bits in data memory address (256 rows)
+    parameter DATA_MEM_DATA_BITS = 16,        // Number of bits in data memory value (8 bit data)
+    parameter PROGRAM_MEM_ADDR_BITS = 16,     // Number of bits in program memory address (256 rows)
+    parameter PROGRAM_MEM_DATA_BITS = 32    // Number of bits in program memory value (16 bit instruction)
 ) (
     input logic clk,
     input logic reset,
@@ -26,22 +29,22 @@ module registers #(
     // Control Signals
     input logic decoded_reg_write_enable,
     input logic [1:0] decoded_reg_input_mux,
-    input logic [DATA_BITS-1:0] decoded_immediate,
+    input logic [7:0] decoded_immediate,
 
     // Thread Unit Outputs
-    input logic [DATA_BITS-1:0] alu_out,
-    input logic [DATA_BITS-1:0] lsu_out,
+    input logic [DATA_MEM_DATA_BITS-1:0] alu_out,
+    input logic [DATA_MEM_DATA_BITS-1:0] lsu_out,
 
     // Registers
-    output logic [7:0] rs,
-    output logic [7:0] rt
+    output logic [DATA_MEM_DATA_BITS-1:0] rs,
+    output logic [DATA_MEM_DATA_BITS-1:0] rt
 );
     localparam ARITHMETIC = 2'b00,
         MEMORY = 2'b01,
         CONSTANT = 2'b10;
 
     // 16 registers per thread (13 free registers and 3 read-only registers)
-    logic [7:0] registers[15:0];
+    logic [DATA_MEM_DATA_BITS-1:0] registers[15:0];
 
     always @(posedge clk) begin
         if (reset) begin
@@ -49,21 +52,21 @@ module registers #(
             rs <= 0;
             rt <= 0;
             // Initialize all free registers
-            registers[0] <= 8'b0;
-            registers[1] <= 8'b0;
-            registers[2] <= 8'b0;
-            registers[3] <= 8'b0;
-            registers[4] <= 8'b0;
-            registers[5] <= 8'b0;
-            registers[6] <= 8'b0;
-            registers[7] <= 8'b0;
-            registers[8] <= 8'b0;
-            registers[9] <= 8'b0;
-            registers[10] <= 8'b0;
-            registers[11] <= 8'b0;
-            registers[12] <= 8'b0;
+            registers[0] <= 16'b0;
+            registers[1] <= 16'b0;
+            registers[2] <= 16'b0;
+            registers[3] <= 16'b0;
+            registers[4] <= 16'b0;
+            registers[5] <= 16'b0;
+            registers[6] <= 16'b0;
+            registers[7] <= 16'b0;
+            registers[8] <= 16'b0;
+            registers[9] <= 16'b0;
+            registers[10] <= 16'b0;
+            registers[11] <= 16'b0;
+            registers[12] <= 16'b0;
             // Initialize read-only registers
-            registers[13] <= 8'b0;              // %blockIdx
+            registers[13] <= 16'b0;              // %blockIdx
             registers[14] <= THREADS_PER_BLOCK; // %blockDim
             registers[15] <= THREAD_ID;         // %threadIdx
         end else if (enable) begin 

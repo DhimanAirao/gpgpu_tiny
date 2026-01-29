@@ -1,14 +1,20 @@
 `timescale 1ns/1ns
+`include "opcode_defs.svh"
 
 // INSTRUCTION DECODER
 // > Decodes an instruction into the control signals necessary to execute it
 // > Each core has it's own decoder
-module decoder (
+module decoder #(
+    parameter DATA_MEM_ADDR_BITS = 16,        // Number of bits in data memory address (256 rows)
+    parameter DATA_MEM_DATA_BITS = 16,        // Number of bits in data memory value (8 bit data)
+    parameter PROGRAM_MEM_ADDR_BITS = 16,     // Number of bits in program memory address (256 rows)
+    parameter PROGRAM_MEM_DATA_BITS = 32    // Number of bits in program memory value (16 bit instruction)
+) (
     input logic clk,
     input logic reset,
 
     input logic [2:0] core_state,
-    input logic [15:0] instruction,
+    input logic [PROGRAM_MEM_DATA_BITS-1:0] instruction,
     
     // Instruction Signals
     output logic [3:0] decoded_rd_address,
@@ -23,24 +29,15 @@ module decoder (
     output logic decoded_mem_write_enable,           // Enable writing to memory
     output logic decoded_nzp_write_enable,           // Enable writing to NZP register
     output logic [1:0] decoded_reg_input_mux,        // Select input to register
-    output logic [1:0] decoded_alu_arithmetic_mux,   // Select arithmetic operation
+    output logic [2:0] decoded_alu_arithmetic_mux,   // Select arithmetic operation
+    output logic decoded_fp_enable,
+    output logic decoded_imm_enable,
     output logic decoded_alu_output_mux,             // Select operation in ALU
     output logic decoded_pc_mux,                     // Select source of next PC
 
     // Return (finished executing thread)
     output logic decoded_ret
 );
-    localparam NOP = 4'b0000,
-        BRnzp = 4'b0001,
-        CMP = 4'b0010,
-        ADD = 4'b0011,
-        SUB = 4'b0100,
-        MUL = 4'b0101,
-        DIV = 4'b0110,
-        LDR = 4'b0111,
-        STR = 4'b1000,
-        CONST = 4'b1001,
-        RET = 4'b1111;
 
     always @(posedge clk) begin 
         if (reset) begin 
@@ -56,6 +53,8 @@ module decoder (
             decoded_reg_input_mux <= 0;
             decoded_alu_arithmetic_mux <= 0;
             decoded_alu_output_mux <= 0;
+            decoded_fp_enable <= 0;
+            decoded_imm_enable <= 0;
             decoded_pc_mux <= 0;
             decoded_ret <= 0;
         end else begin 
@@ -76,11 +75,13 @@ module decoder (
                 decoded_reg_input_mux <= 0;
                 decoded_alu_arithmetic_mux <= 0;
                 decoded_alu_output_mux <= 0;
+                decoded_fp_enable <= 0;
+                decoded_imm_enable <= 0;
                 decoded_pc_mux <= 0;
                 decoded_ret <= 0;
 
                 // Set the control signals for each instruction
-                case (instruction[15:12])
+                case (instruction[19:12])
                     NOP: begin 
                         // no-op
                     end
@@ -94,22 +95,22 @@ module decoder (
                     ADD: begin 
                         decoded_reg_write_enable <= 1;
                         decoded_reg_input_mux <= 2'b00;
-                        decoded_alu_arithmetic_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 3'b000;
                     end
                     SUB: begin 
                         decoded_reg_write_enable <= 1;
                         decoded_reg_input_mux <= 2'b00;
-                        decoded_alu_arithmetic_mux <= 2'b01;
+                        decoded_alu_arithmetic_mux <= 3'b001;
                     end
                     MUL: begin 
                         decoded_reg_write_enable <= 1;
                         decoded_reg_input_mux <= 2'b00;
-                        decoded_alu_arithmetic_mux <= 2'b10;
+                        decoded_alu_arithmetic_mux <= 3'b010;
                     end
                     DIV: begin 
                         decoded_reg_write_enable <= 1;
                         decoded_reg_input_mux <= 2'b00;
-                        decoded_alu_arithmetic_mux <= 2'b11;
+                        decoded_alu_arithmetic_mux <= 3'b011;
                     end
                     LDR: begin 
                         decoded_reg_write_enable <= 1;
@@ -125,6 +126,18 @@ module decoder (
                     end
                     RET: begin 
                         decoded_ret <= 1;
+                    end
+                    ADDFP: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 3'b000;
+                        decoded_fp_enable <= 1;
+                    end
+                    MULFP: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 3'b010;
+                        decoded_fp_enable <= 1;
                     end
                 endcase
             end

@@ -4,7 +4,12 @@
 // > Handles asynchronous memory load and store operations and waits for response
 // > Each thread in each core has it's own LSU
 // > LDR, STR instructions are executed here
-module lsu (
+module lsu #(
+    parameter DATA_MEM_ADDR_BITS = 16,        // Number of bits in data memory address (256 rows)
+    parameter DATA_MEM_DATA_BITS = 16,        // Number of bits in data memory value (8 bit data)
+    parameter PROGRAM_MEM_ADDR_BITS = 16,     // Number of bits in program memory address (256 rows)
+    parameter PROGRAM_MEM_DATA_BITS = 32    // Number of bits in program memory value (16 bit instruction)
+) (
     input logic clk,
     input logic reset,
     input logic enable, // If current block has less threads then block size, some LSUs will be inactive
@@ -17,22 +22,22 @@ module lsu (
     input logic decoded_mem_write_enable,
 
     // Registers
-    input logic [7:0] rs,
-    input logic [7:0] rt,
+    input logic [DATA_MEM_DATA_BITS-1:0] rs,
+    input logic [DATA_MEM_DATA_BITS-1:0] rt,
 
     // Data Memory
     output logic mem_read_valid,
-    output logic [7:0] mem_read_address,
+    output logic [DATA_MEM_ADDR_BITS-1:0] mem_read_address,
     input logic mem_read_ready,
-    input logic [7:0] mem_read_data,
+    input logic [DATA_MEM_DATA_BITS-1:0] mem_read_data,
     output logic mem_write_valid,
-    output logic [7:0] mem_write_address,
-    output logic [7:0] mem_write_data,
+    output logic [DATA_MEM_ADDR_BITS-1:0] mem_write_address,
+    output logic [DATA_MEM_DATA_BITS-1:0] mem_write_data,
     input logic mem_write_ready,
 
     // LSU Outputs
     output logic [1:0] lsu_state,
-    output logic [7:0] lsu_out
+    output logic [DATA_MEM_DATA_BITS-1:0] lsu_out
 );
     localparam IDLE = 2'b00, REQUESTING = 2'b01, WAITING = 2'b10, DONE = 2'b11;
 

@@ -24,3 +24,5 @@ vlog -work work {E:\intelFPGA_lite\gpgpu\registers.sv}
 vlog -work work {E:\intelFPGA_lite\gpgpu\scheduler.sv}
 vlog -work work {E:\intelFPGA_lite\gpgpu\global_memory\prog_mem\prog_mem.v}
 vlog -work work {E:\intelFPGA_lite\gpgpu\global_memory\data_mem\data_mem.v}
+vlog -work work {E:\intelFPGA_lite\gpgpu\global_memory\prog_mem\prog_mem_16A_32D.v}
+vlog -work work {E:\intelFPGA_lite\gpgpu\global_memory\data_mem\data_mem_16A_16D.v}

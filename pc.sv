@@ -7,8 +7,10 @@
 // > The NZP register value is set by the CMP instruction (based on >/=/< comparison) to 
 //   initiate the BRnzp instruction for branching
 module pc #(
-    parameter DATA_MEM_DATA_BITS = 8,
-    parameter PROGRAM_MEM_ADDR_BITS = 8
+    parameter DATA_MEM_ADDR_BITS = 16,        // Number of bits in data memory address (256 rows)
+    parameter DATA_MEM_DATA_BITS = 16,        // Number of bits in data memory value (8 bit data)
+    parameter PROGRAM_MEM_ADDR_BITS = 16,     // Number of bits in program memory address (256 rows)
+    parameter PROGRAM_MEM_DATA_BITS = 32    // Number of bits in program memory value (16 bit instruction)
 ) (
     input logic clk,
     input logic reset,
@@ -19,7 +21,7 @@ module pc #(
 
     // Control Signals
     input logic [2:0] decoded_nzp,
-    input logic [DATA_MEM_DATA_BITS-1:0] decoded_immediate,
+    input logic [7:0] decoded_immediate,
     input logic decoded_nzp_write_enable,
     input logic decoded_pc_mux, 
 
@@ -27,8 +29,8 @@ module pc #(
     input logic [DATA_MEM_DATA_BITS-1:0] alu_out,
 
     // Current & Next PCs
-    input logic [PROGRAM_MEM_ADDR_BITS-1:0] current_pc,
-    output logic [PROGRAM_MEM_ADDR_BITS-1:0] next_pc
+    input logic [7:0] current_pc,
+    output logic [7:0] next_pc
 );
     logic [2:0] nzp;
 

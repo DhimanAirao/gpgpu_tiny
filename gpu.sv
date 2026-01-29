@@ -7,11 +7,11 @@
 // > Has memory controllers to interface between external memory and its multiple cores
 // > Configurable number of cores and thread capacity per core
 module gpu #(
-    parameter DATA_MEM_ADDR_BITS = 8,        // Number of bits in data memory address (256 rows)
-    parameter DATA_MEM_DATA_BITS = 8,        // Number of bits in data memory value (8 bit data)
+    parameter DATA_MEM_ADDR_BITS = 16,        // Number of bits in data memory address (256 rows)
+    parameter DATA_MEM_DATA_BITS = 16,        // Number of bits in data memory value (8 bit data)
     parameter DATA_MEM_NUM_CHANNELS = 4,     // Number of concurrent channels for sending requests to data memory
-    parameter PROGRAM_MEM_ADDR_BITS = 8,     // Number of bits in program memory address (256 rows)
-    parameter PROGRAM_MEM_DATA_BITS = 16,    // Number of bits in program memory value (16 bit instruction)
+    parameter PROGRAM_MEM_ADDR_BITS = 16,     // Number of bits in program memory address (256 rows)
+    parameter PROGRAM_MEM_DATA_BITS = 32,    // Number of bits in program memory value (16 bit instruction)
     parameter PROGRAM_MEM_NUM_CHANNELS = 1,  // Number of concurrent channels for sending requests to program memory
     parameter NUM_CORES = 2,                 // Number of cores to include in this GPU
     parameter THREADS_PER_BLOCK = 4,         // Number of threads to handle per block (determines the compute resources of each core)
@@ -32,7 +32,7 @@ module gpu #(
     
     // Initialization Data (from external source)
     input logic [PROGRAM_MEM_DATA_BITS-1:0] prog_init_data [0:PROG_DATA_SIZE-1],
-    input logic [DATA_MEM_DATA_BITS-1:0] data_init_data [DATA_SIZE-1:0]
+    input logic [DATA_MEM_DATA_BITS-1:0] data_init_data [0:DATA_SIZE-1]
 );
     // Initialization state machine
     localparam INIT_IDLE = 3'b000;
@@ -109,7 +109,7 @@ module gpu #(
     assign prog_mem_wren_mux = (init_state == INIT_PROG) ? 1'b1 : 1'b0;  // Currently no writes from controller
     assign prog_mem_rden_mux = (init_state == INIT_DONE) ? program_mem_read_valid[0] : 1'b0;
     
-    prog_mem prog_mem_inst (
+    prog_mem_16A_32D prog_mem_16A_32D_inst (
         .address(prog_mem_addr_mux),
         .clock(clk),
         .data(prog_mem_data_mux),
@@ -161,7 +161,7 @@ module gpu #(
             assign data_mem_rden_mux[ch] = (init_state == INIT_DONE && data_mem_read_valid[ch]) ? 1'b1 : 1'b0;
             
             // Data memory instance for this channel
-            data_mem data_mem_inst (
+            data_mem_16A_16D data_mem_16A_16D_inst (
                 .address(data_mem_addr_mux[ch]),
                 .clock(clk),
                 .data(data_mem_data_mux[ch]),

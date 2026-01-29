@@ -41,16 +41,16 @@ module core #(
     // State
     logic [2:0] core_state;
     logic [2:0] fetcher_state;
-    logic [15:0] instruction;
+    logic [PROGRAM_MEM_DATA_BITS-1:0] instruction;
 
     // Intermediate Signals
     logic [7:0] current_pc;
     logic [7:0] next_pc[THREADS_PER_BLOCK-1:0];
-    logic [7:0] rs[THREADS_PER_BLOCK-1:0];
-    logic [7:0] rt[THREADS_PER_BLOCK-1:0];
+    logic [DATA_MEM_DATA_BITS-1:0] rs[THREADS_PER_BLOCK-1:0];
+    logic [DATA_MEM_DATA_BITS-1:0] rt[THREADS_PER_BLOCK-1:0];
     logic [1:0] lsu_state[THREADS_PER_BLOCK-1:0];
-    logic [7:0] lsu_out[THREADS_PER_BLOCK-1:0];
-    logic [7:0] alu_out[THREADS_PER_BLOCK-1:0];
+    logic [DATA_MEM_DATA_BITS-1:0] lsu_out[THREADS_PER_BLOCK-1:0];
+    logic [DATA_MEM_DATA_BITS-1:0] alu_out[THREADS_PER_BLOCK-1:0];
     
     // Decoded Instruction Signals
     logic [3:0] decoded_rd_address;
@@ -65,10 +65,12 @@ module core #(
     logic decoded_mem_write_enable;           // Enable writing to memory
     logic decoded_nzp_write_enable;           // Enable writing to NZP register
     logic [1:0] decoded_reg_input_mux;        // Select input to register
-    logic [1:0] decoded_alu_arithmetic_mux;   // Select arithmetic operation
+    logic [2:0] decoded_alu_arithmetic_mux;   // Select arithmetic operation
     logic decoded_alu_output_mux;             // Select operation in ALU
     logic decoded_pc_mux;                     // Select source of next PC
     logic decoded_ret;
+    logic decoded_fp_enable;
+    logic decoded_imm_enable;
 
     // Fetcher
     fetcher #(
@@ -88,7 +90,12 @@ module core #(
     );
 
     // Decoder
-    decoder decoder_instance (
+    decoder #(
+        .PROGRAM_MEM_ADDR_BITS(PROGRAM_MEM_ADDR_BITS),
+        .PROGRAM_MEM_DATA_BITS(PROGRAM_MEM_DATA_BITS),
+        .DATA_MEM_ADDR_BITS(DATA_MEM_ADDR_BITS),        
+        .DATA_MEM_DATA_BITS(DATA_MEM_DATA_BITS)        
+    ) decoder_instance (
         .clk(clk),
         .reset(reset),
         .core_state(core_state),
@@ -104,6 +111,8 @@ module core #(
         .decoded_nzp_write_enable(decoded_nzp_write_enable),
         .decoded_reg_input_mux(decoded_reg_input_mux),
         .decoded_alu_arithmetic_mux(decoded_alu_arithmetic_mux),
+        .decoded_fp_enable(decoded_fp_enable),
+        .decoded_imm_enable(decoded_imm_enable),
         .decoded_alu_output_mux(decoded_alu_output_mux),
         .decoded_pc_mux(decoded_pc_mux),
         .decoded_ret(decoded_ret)
@@ -132,20 +141,30 @@ module core #(
     generate
         for (i = 0; i < THREADS_PER_BLOCK; i = i + 1) begin : threads
             // ALU
-            alu alu_instance (
+            alu #(
+                .DATA_MEM_ADDR_BITS(DATA_MEM_ADDR_BITS),        // Number of bits in data memory address (256 rows)
+                .DATA_MEM_DATA_BITS(DATA_MEM_DATA_BITS)        // Number of bits in data memory value (8 bit data)
+            ) alu_instance (
                 .clk(clk),
                 .reset(reset),
                 .enable(i < thread_count),
                 .core_state(core_state),
                 .decoded_alu_arithmetic_mux(decoded_alu_arithmetic_mux),
                 .decoded_alu_output_mux(decoded_alu_output_mux),
+                .decoded_fp_enable(decoded_fp_enable),
+                .decoded_imm_enable(decoded_imm_enable),
                 .rs(rs[i]),
                 .rt(rt[i]),
                 .alu_out(alu_out[i])
             );
 
             // LSU
-            lsu lsu_instance (
+            lsu #(
+                .PROGRAM_MEM_ADDR_BITS(PROGRAM_MEM_ADDR_BITS),
+                .PROGRAM_MEM_DATA_BITS(PROGRAM_MEM_DATA_BITS),
+                .DATA_MEM_ADDR_BITS(DATA_MEM_ADDR_BITS),        
+                .DATA_MEM_DATA_BITS(DATA_MEM_DATA_BITS)        
+            ) lsu_instance (
                 .clk(clk),
                 .reset(reset),
                 .enable(i < thread_count),
@@ -170,7 +189,10 @@ module core #(
             registers #(
                 .THREADS_PER_BLOCK(THREADS_PER_BLOCK),
                 .THREAD_ID(i),
-                .DATA_BITS(DATA_MEM_DATA_BITS)
+                .PROGRAM_MEM_ADDR_BITS(PROGRAM_MEM_ADDR_BITS),
+                .PROGRAM_MEM_DATA_BITS(PROGRAM_MEM_DATA_BITS),
+                .DATA_MEM_ADDR_BITS(DATA_MEM_ADDR_BITS),        
+                .DATA_MEM_DATA_BITS(DATA_MEM_DATA_BITS)   
             ) register_instance (
                 .clk(clk),
                 .reset(reset),
@@ -191,8 +213,10 @@ module core #(
 
             // Program Counter
             pc #(
-                .DATA_MEM_DATA_BITS(DATA_MEM_DATA_BITS),
-                .PROGRAM_MEM_ADDR_BITS(PROGRAM_MEM_ADDR_BITS)
+                .PROGRAM_MEM_ADDR_BITS(PROGRAM_MEM_ADDR_BITS),
+                .PROGRAM_MEM_DATA_BITS(PROGRAM_MEM_DATA_BITS),
+                .DATA_MEM_ADDR_BITS(DATA_MEM_ADDR_BITS),        
+                .DATA_MEM_DATA_BITS(DATA_MEM_DATA_BITS)        
             ) pc_instance (
                 .clk(clk),
                 .reset(reset),
