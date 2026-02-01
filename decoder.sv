@@ -29,7 +29,7 @@ module decoder #(
     output logic decoded_mem_write_enable,           // Enable writing to memory
     output logic decoded_nzp_write_enable,           // Enable writing to NZP register
     output logic [1:0] decoded_reg_input_mux,        // Select input to register
-    output logic [2:0] decoded_alu_arithmetic_mux,   // Select arithmetic operation
+    output logic [3:0] decoded_alu_arithmetic_mux,   // Select arithmetic operation
     output logic decoded_fp_enable,
     output logic decoded_imm_enable,
     output logic decoded_alu_output_mux,             // Select operation in ALU
@@ -85,32 +85,11 @@ module decoder #(
                     NOP: begin 
                         // no-op
                     end
+                    RET: begin 
+                        decoded_ret <= 1;
+                    end
                     BRnzp: begin 
                         decoded_pc_mux <= 1;
-                    end
-                    CMP: begin 
-                        decoded_alu_output_mux <= 1;
-                        decoded_nzp_write_enable <= 1;
-                    end
-                    ADD: begin 
-                        decoded_reg_write_enable <= 1;
-                        decoded_reg_input_mux <= 2'b00;
-                        decoded_alu_arithmetic_mux <= 3'b000;
-                    end
-                    SUB: begin 
-                        decoded_reg_write_enable <= 1;
-                        decoded_reg_input_mux <= 2'b00;
-                        decoded_alu_arithmetic_mux <= 3'b001;
-                    end
-                    MUL: begin 
-                        decoded_reg_write_enable <= 1;
-                        decoded_reg_input_mux <= 2'b00;
-                        decoded_alu_arithmetic_mux <= 3'b010;
-                    end
-                    DIV: begin 
-                        decoded_reg_write_enable <= 1;
-                        decoded_reg_input_mux <= 2'b00;
-                        decoded_alu_arithmetic_mux <= 3'b011;
                     end
                     LDR: begin 
                         decoded_reg_write_enable <= 1;
@@ -124,19 +103,90 @@ module decoder #(
                         decoded_reg_write_enable <= 1;
                         decoded_reg_input_mux <= 2'b10;
                     end
-                    RET: begin 
-                        decoded_ret <= 1;
+                    CMP: begin 
+                        decoded_alu_output_mux <= 1;
+                        decoded_nzp_write_enable <= 1;
                     end
+                    ADD: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 4'h0;
+                    end
+                    SUB: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 4'h1;
+                    end
+                    MUL: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 4'h2;
+                    end
+                    DIV: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 4'h3;
+                    end
+                    REM: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 4'h4;
+                    end
+                    NOT: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 4'h5;
+                    end
+                    AND: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 4'h6;
+                    end
+                    OR: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 4'h7;
+                    end
+                    XOR: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 4'h8;
+                    end
+                    SLL: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 4'h9;
+                    end 
+                    SRL: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 4'hA;
+                    end 
+                    NOTL: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 4'hB;
+                    end
+                    ANDL: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 4'hC;
+                    end 
+                    ORL: begin 
+                        decoded_reg_write_enable <= 1;
+                        decoded_reg_input_mux <= 2'b00;
+                        decoded_alu_arithmetic_mux <= 4'hD;
+                    end                     
                     ADDFP: begin 
                         decoded_reg_write_enable <= 1;
                         decoded_reg_input_mux <= 2'b00;
-                        decoded_alu_arithmetic_mux <= 3'b000;
+                        decoded_alu_arithmetic_mux <= 4'h0;
                         decoded_fp_enable <= 1;
                     end
                     MULFP: begin 
                         decoded_reg_write_enable <= 1;
                         decoded_reg_input_mux <= 2'b00;
-                        decoded_alu_arithmetic_mux <= 3'b010;
+                        decoded_alu_arithmetic_mux <= 4'h2;
                         decoded_fp_enable <= 1;
                     end
                 endcase

@@ -10,7 +10,7 @@ module alu #(
 
     input  logic [2:0]  core_state,
 
-    input  logic [2:0]  decoded_alu_arithmetic_mux,
+    input  logic [3:0]  decoded_alu_arithmetic_mux,
     input  logic        decoded_alu_output_mux,
     input  logic        decoded_fp_enable,   // 1 = minifloat, 0 = integer
     input  logic        decoded_imm_enable,
@@ -20,46 +20,64 @@ module alu #(
     output logic [DATA_MEM_DATA_BITS-1:0]  alu_out
 );
 
-    localparam ADD = 3'b000,
-               SUB = 3'b001,
-               MUL = 3'b010,
-               DIV = 3'b011;
+    localparam ADD = 4'h0,
+               SUB = 4'h1,
+               MUL = 4'h2,
+               DIV = 4'h3,
+               REM = 4'h4,
+               NOT = 4'h5,
+               AND = 4'h6,
+               OR  = 4'h7,
+               XOR = 4'h8,
+               SLL = 4'h9,
+               SRL = 4'hA,
+               NOTL = 4'hB,
+               ANDL = 4'hC,
+               ORL  = 4'hD;
 
-    localparam FP_BIAS = 7;
+
+    localparam int FP16_BIAS = 15;
 
     logic [DATA_MEM_DATA_BITS-1:0] alu_out_logic;
     assign alu_out = alu_out_logic;
 
-
     // -----------------------------
-    // Minifloat helpers (E4M4)
+    // FP16 helpers (1S5E10)
     // -----------------------------
 
-    function automatic logic [4:0] mf_mantissa(input logic [7:0] f);
-        mf_mantissa = {1'b1, f[3:0]}; // implicit 1 + 4 fraction bits
+    function automatic logic mf16_sign(input logic [15:0] f);
+        return f[15];
     endfunction
 
-    function automatic logic [3:0] mf_exponent(input logic [7:0] f);
-        mf_exponent = f[7:4];
+    function automatic logic [4:0] mf16_exponent(input logic [15:0] f);
+        return f[14:10];
     endfunction
 
+    function automatic logic [10:0] mf16_mantissa(input logic [15:0] f);
+        // implicit 1 + 10 fraction bits
+        return {1'b1, f[9:0]};
+    endfunction
+
+
     // -----------------------------
-    // Minifloat ADD
+    // FP16 ADD
     // -----------------------------
-    function automatic logic [7:0] minifloat_add(
-        input logic [7:0] a,
-        input logic [7:0] b
+    function automatic logic [15:0] fp16_add(
+        input logic [15:0] a,
+        input logic [15:0] b
     );
-        logic [3:0] ea, eb, er;
-        logic [4:0] ma, mb;
-        logic [5:0] mr;
+        logic sa, sb, sr;
+        logic [4:0] ea, eb, er;
+        logic [10:0] ma, mb;
+        logic signed [12:0] mr;
         int shift;
 
-        ea = mf_exponent(a);
-        eb = mf_exponent(b);
-
-        ma = mf_mantissa(a);
-        mb = mf_mantissa(b);
+        sa = mf16_sign(a);
+        sb = mf16_sign(b);
+        ea = mf16_exponent(a);
+        eb = mf16_exponent(b);
+        ma = mf16_mantissa(a);
+        mb = mf16_mantissa(b);
 
         // Align exponents
         if (ea > eb) begin
@@ -72,49 +90,59 @@ module alu #(
             er = eb;
         end
 
-        // Add mantissas
-        mr = ma + mb;
+        // Apply sign
+        mr = (sa ? -ma : ma) + (sb ? -mb : mb);
+
+        // Result sign
+        sr = mr < 0;
+        if (sr) mr = -mr;
 
         // Normalize
-        if (mr >= 32) begin
+        if (mr[12]) begin
             mr = mr >> 1;
             er = er + 1;
         end
 
-        minifloat_add = {er, mr[3:0]};
+        fp16_add = {sr, er, mr[9:0]};
     endfunction
 
+
     // -----------------------------
-    // Minifloat MUL
+    // FP16 MUL
     // -----------------------------
-    function automatic logic [7:0] minifloat_mul(
-        input logic [7:0] a,
-        input logic [7:0] b
+    function automatic logic [15:0] fp16_mul(
+        input logic [15:0] a,
+        input logic [15:0] b
     );
-        logic [3:0] ea, eb, er;
-        logic [4:0] ma, mb;
-        logic [9:0] prod;
+        logic sa, sb, sr;
+        logic [4:0] ea, eb, er;
+        logic [10:0] ma, mb;
+        logic [21:0] prod;
 
-        ea = mf_exponent(a);
-        eb = mf_exponent(b);
+        sa = mf16_sign(a);
+        sb = mf16_sign(b);
+        sr = sa ^ sb;
 
-        ma = mf_mantissa(a);
-        mb = mf_mantissa(b);
+        ea = mf16_exponent(a);
+        eb = mf16_exponent(b);
+        ma = mf16_mantissa(a);
+        mb = mf16_mantissa(b);
 
-        prod = ma * mb; // up to 10 bits
+        prod = ma * mb; // 11x11 = 22 bits
 
-        er = ea + eb - FP_BIAS;
+        er = ea + eb - FP16_BIAS;
 
         // Normalize
-        if (prod[9]) begin
+        if (prod[21]) begin
             prod = prod >> 1;
             er   = er + 1;
         end else begin
-            prod = prod >> 4;
+            prod = prod >> 10;
         end
 
-        minifloat_mul = {er, prod[3:0]};
+        fp16_mul = {sr, er, prod[9:0]};
     endfunction
+
 
     // -----------------------------
     // ALU sequential logic
@@ -129,11 +157,22 @@ module alu #(
                                   (rs > rt),
                                   (rs == rt),
                                   (rs < rt)};
+            end else if (decoded_imm_enable) begin
+                case (decoded_alu_arithmetic_mux)
+
+                    ADD: alu_out_logic <= rs + rt;
+
+                    SUB: alu_out_logic <= rs - rt;
+
+                    MUL: alu_out_logic <= rs * rt;
+
+                    DIV: alu_out_logic <= rs / rt;
+                endcase
             end else begin
                 case (decoded_alu_arithmetic_mux)
 
                     ADD: alu_out_logic <= decoded_fp_enable
-                        ? minifloat_add(rs, rt)
+                        ? fp16_add(rs, rt)
                         : rs + rt;
 
                     SUB: alu_out_logic <= decoded_fp_enable
@@ -141,12 +180,32 @@ module alu #(
                         : rs - rt;
 
                     MUL: alu_out_logic <= decoded_fp_enable
-                        ? minifloat_mul(rs, rt)
+                        ? fp16_mul(rs, rt)
                         : rs * rt;
 
                     DIV: alu_out_logic <= decoded_fp_enable
                         ? 8'b0        // FP DIV intentionally omitted
                         : rs / rt;
+
+                    REM: alu_out_logic <= rs % rt;
+
+                    NOT: alu_out_logic <= ~rs;
+
+                    AND: alu_out_logic <= rs & rt;
+
+                    OR: alu_out_logic <= rs | rt;
+
+                    XOR: alu_out_logic <= rs ^ rt;
+
+                    SLL: alu_out_logic <= rs << rt;
+
+                    SRL: alu_out_logic <= rs >> rt;
+
+                    NOTL: alu_out_logic <= !rs;
+
+                    ANDL: alu_out_logic <= rs && rt;
+
+                    ORL: alu_out_logic <= rs || rt;
 
                 endcase
             end

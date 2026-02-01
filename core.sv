@@ -65,7 +65,7 @@ module core #(
     logic decoded_mem_write_enable;           // Enable writing to memory
     logic decoded_nzp_write_enable;           // Enable writing to NZP register
     logic [1:0] decoded_reg_input_mux;        // Select input to register
-    logic [2:0] decoded_alu_arithmetic_mux;   // Select arithmetic operation
+    logic [3:0] decoded_alu_arithmetic_mux;   // Select arithmetic operation
     logic decoded_alu_output_mux;             // Select operation in ALU
     logic decoded_pc_mux;                     // Select source of next PC
     logic decoded_ret;

@@ -37,22 +37,21 @@ module gpgpu(
     initial begin
         // Program data: sample 16-bit instruction values
         prog_init_data = '{
-            16'b0101000011011110, // MUL R0, %blockIdx, %blockDim
-            16'b0011000000001111, // ADD R0, R0, %threadIdx         ; i = blockIdx * blockDim + threadIdx
-            16'b1001000100000000, // CONST R1, //0                   ; baseA (matrix A base address)
-            16'b1001001000001000, // CONST R2, //8                   ; baseB (matrix B base address)
-            16'b1001001100010000, // CONST R3, //16                  ; baseC (matrix C base address)
-            16'b0011010000010000, // ADD R4, R1, R0                 ; addr(A[i]) = baseA + i
-            16'b0111010001000000, // LDR R4, R4                     ; load A[i] from global memory
-            16'b0011010100100000, // ADD R5, R2, R0                 ; addr(B[i]) = baseB + i
-            16'b0111010101010000, // LDR R5, R5                     ; load B[i] from global memory
-            16'b0011011001000101, // ADD R6, R4, R5                 ; C[i] = A[i] + B[i]
-            16'b0011011100110000, // ADD R7, R3, R0                 ; addr(C[i]) = baseC + i
-            16'b1000000001110110, // STR R7, R6                     ; store C[i] in global memory
-            16'b1111000000000000  // RET                            ; end of kernel
+            16'b1001000011011110, // MUL R0, %blockIdx, %blockDim
+            16'b0111000000001111, // ADD R0, R0, %threadIdx         ; i = blockIdx * blockDim + threadIdx
+            16'b0101000100000000, // CONST R1, //0                   ; baseA (matrix A base address)
+            16'b0101001000001000, // CONST R2, //8                   ; baseB (matrix B base address)
+            16'b0101001100010000, // CONST R3, //16                  ; baseC (matrix C base address)
+            16'b0111010000010000, // ADD R4, R1, R0                 ; addr(A[i]) = baseA + i
+            16'b0011010001000000, // LDR R4, R4                     ; load A[i] from global memory
+            16'b0111010100100000, // ADD R5, R2, R0                 ; addr(B[i]) = baseB + i
+            16'b0011010101010000, // LDR R5, R5                     ; load B[i] from global memory
+            16'b0111011001000101, // ADD R6, R4, R5                 ; C[i] = A[i] + B[i]
+            16'b0111011100110000, // ADD R7, R3, R0                 ; addr(C[i]) = baseC + i
+            16'b0100000001110110, // STR R7, R6                     ; store C[i] in global memory
+            16'b0001000000000000  // RET                            ; end of kernel
         };
 
-        
         // Data: sample 8-bit values
         data_init_data = '{
             8'h74, 8'h78, 8'h73, 8'h7b, 8'h82, 8'd00, 8'd00, 8'd00,
